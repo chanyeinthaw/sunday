@@ -149,7 +149,8 @@ it.effect(
       expect(turns).toHaveLength(2)
       expect(yield* Ref.get(test.replies)).toEqual(
         turns.map(
-          (turn) => `Started: ${task.title}\nhttps://code.p.si14.space/env/${turn.threadId}`,
+          (turn) =>
+            `Started: ${task.title}\n[Open in app](t3code://threads/env/${turn.threadId}) · [Open in web](https://code.p.si14.space/env/${turn.threadId})`,
         ),
       )
       expect(new Set(turns.map((command) => command.threadId)).size).toBe(2)

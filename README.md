@@ -2,7 +2,7 @@
 
 A Discord mention starts a new coding task in T3 Code. The bot sends the mention, up to N previous messages, the channel description, and existing T3 projects to an LLM. The LLM selects the project or GitHub repository and prepares the initial prompt. If it cannot identify a target, the bot asks for repository information. Mention it again to submit a new task.
 
-Each accepted mention creates a separate worktree and T3 thread. Repeated mentions in the same Discord channel or thread always start new tasks. The bot acknowledges task launch with a T3 link as a reply to the invoking message. Further conversation happens in T3.
+Each accepted mention creates a separate worktree and T3 thread. Repeated mentions in the same Discord channel or thread always start new tasks. The bot acknowledges task launch with Markdown links to open the task in the mobile app or web UI as a reply to the invoking message. Further conversation happens in T3.
 
 Task state stays in memory. Restarting the bot loses duplicate detection; work already started in T3 continues. Only pairing credentials are stored locally. Linear is deferred until the Discord flow passes end-to-end testing.
 
