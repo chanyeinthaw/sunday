@@ -1,0 +1,28 @@
+{
+  "discord": {
+    "token": { "env": "DISCORD_BOT_TOKEN" },
+    "guilds": [{ "id": "842724454677348352", "userIds": ["435482941515104257"] }],
+    "contextMessages": 25
+  },
+  "t3": {
+    "serverUrl": "http://localhost:3773",
+    "stateDirectory": "/home/chanyeinthaw/.local/state/sunday",
+    "environmentId": "a9a5d4b6-301e-4c26-834f-3b2c2650da61",
+    "providerInstanceId": "codex",
+    "cloneRoot": "/home/chanyeinthaw/Projects/sunday-workspaces/repos",
+    "model": "gpt-6-luna",
+    "reasoningEffort": "xhigh",
+    "runtimeMode": "approval-required"
+  },
+  "llm": {
+    "apiUrl": "https://cpa1.p.si14.space/v1",
+    "apiKey": { "env": "CPA_API_KEY" },
+    "model": "gpt-6-luna",
+    "reasoningEffort": "xhigh"
+  },
+  "github": { "token": null },
+  "logging": {
+    "file": "/home/chanyeinthaw/.local/state/sunday/logs/sunday.jsonl",
+    "level": "Info"
+  }
+}

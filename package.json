@@ -1,0 +1,42 @@
+{
+  "name": "sunday",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/main.ts",
+    "start": "bun src/main.ts",
+    "build": "bun build src/main.ts --compile --target=bun-linux-x64-baseline --outfile dist/sunday",
+    "postinstall": "effect-tsgo patch --typescript --oxlint",
+    "check": "effect-tsgo patch --typescript && tsc --noEmit",
+    "lint": "effect-tsgo patch --no-typescript --oxlint && oxlint .",
+    "format": "oxfmt .",
+    "format:check": "oxfmt --check .",
+    "verify": "pnpm format:check && pnpm lint && pnpm check && pnpm test",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@effect/ai-openai": "4.0.0",
+    "@effect/platform-bun": "4.0.0",
+    "discord.js": "14.27.0",
+    "effect": "4.0.0"
+  },
+  "devDependencies": {
+    "@effect/tsgo": "0.47.2",
+    "@effect/vitest": "4.0.0",
+    "@oxlint/plugins": "1.86.0",
+    "@types/bun": "1.4.2",
+    "@types/ws": "8.18.1",
+    "oxfmt": "0.71.0",
+    "oxlint": "1.86.0",
+    "oxlint-tsgolint": "7.0.2003",
+    "typescript": "7.0.2",
+    "vitest": "5.0.3",
+    "ws": "8.18.3"
+  },
+  "engines": {
+    "bun": ">=1.4.2",
+    "pnpm": ">=12.6.0"
+  },
+  "packageManager": "pnpm@12.6.0"
+}
