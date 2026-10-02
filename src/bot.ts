@@ -38,11 +38,6 @@ export const runBot = Effect.gen(function* () {
   const settings = yield* Settings
   const seen = yield* Ref.make<ReadonlyArray<string>>([])
   const launchLock = yield* Semaphore.make(1)
-  const modelSelection = {
-    instanceId: settings.providerInstanceId,
-    model: settings.codingModel,
-    options: [{ id: 'reasoningEffort', value: settings.codingReasoningEffort }],
-  }
   const threadLink = (threadId: string) =>
     `${settings.publicUrl}/${encodeURIComponent(settings.environmentId)}/${encodeURIComponent(threadId)}`
 
@@ -147,6 +142,12 @@ export const runBot = Effect.gen(function* () {
     yield* launchLock.withPermit(
       Effect.gen(function* () {
         const target = yield* resolveTarget(task, projects)
+        const modelSelection = yield* t3.defaultModel(target.project)
+        if (!modelSelection)
+          return yield* new BotError({
+            message:
+              'No default model is configured in T3. Set a project or environment default in T3, then mention me again.',
+          })
         const createdAt = new Date(yield* Clock.currentTimeMillis).toISOString()
         yield* t3.dispatch({
           type: 'thread.turn.start',

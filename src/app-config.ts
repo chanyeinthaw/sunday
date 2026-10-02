@@ -47,10 +47,7 @@ export const Configuration = Schema.Struct({
     publicUrl: Schema.optionalKey(ServerOrigin),
     stateDirectory: AbsolutePath,
     environmentId: Schema.NonEmptyString,
-    providerInstanceId: Schema.NonEmptyString,
     cloneRoot: AbsolutePath,
-    model: Schema.NonEmptyString,
-    reasoningEffort: Schema.Literals(['low', 'medium', 'high', 'xhigh']),
     runtimeMode: Schema.Literals(['approval-required', 'auto-accept-edits', 'auto', 'full-access']),
   }),
   llm: Schema.Struct({

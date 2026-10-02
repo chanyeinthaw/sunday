@@ -12,7 +12,7 @@ import * as RpcSerialization from 'effect/rpc/RpcSerialization'
 import { T3Auth } from './auth.ts'
 import { T3Config } from './config.ts'
 import { AuthError, CredentialError } from './auth-model.ts'
-import { Command, Project, group } from './protocol.ts'
+import { Command, ModelSelection, Project, group } from './protocol.ts'
 
 export class T3Error extends Schema.TaggedError<T3Error>()('T3Error', {
   operation: Schema.String,
@@ -27,6 +27,9 @@ interface CloneRequest {
   readonly repository: string
 }
 interface ClientMethods {
+  readonly defaultModel: (
+    project: Project,
+  ) => Effect.Effect<typeof ModelSelection.Type | null, Failure>
   readonly projects: () => Effect.Effect<ReadonlyArray<Project>, Failure>
   readonly dispatch: (command: Command) => Effect.Effect<number, Failure>
   readonly clone: (
@@ -73,6 +76,21 @@ export const clientLayer = Layer.effect(
       Effect.timeout('30 seconds'),
       Effect.mapError(() => new T3Error({ operation: 'projects' })),
     )
+    const defaultModel = Effect.fn('T3Client.defaultModel')(
+      function* (project: Project) {
+        const client = yield* connect()
+        const settings = yield* client['server.getSettings']({})
+        const override = settings.projectSettingsOverrides?.[project.id]?.defaultModelSelection
+        // A null override clears the project selection; legacy fields apply only before folding.
+        if (override !== undefined) return override
+        if (!settings.projectSettingsFolded && project.defaultModelSelection)
+          return project.defaultModelSelection
+        return settings.defaultModelSelection
+      },
+      Effect.scoped,
+      Effect.timeout('30 seconds'),
+      Effect.mapError(() => new T3Error({ operation: 'defaultModel' })),
+    )
     const dispatch = Effect.fn('T3Client.dispatch')(
       function* (command: Command) {
         const client = yield* connect()
@@ -113,6 +131,6 @@ export const clientLayer = Layer.effect(
       Effect.timeout('30 seconds'),
       Effect.mapError(() => new T3Error({ operation: 'clonePhase' })),
     )
-    return T3Client.of({ projects, dispatch, clone, clonePhase })
+    return T3Client.of({ projects, defaultModel, dispatch, clone, clonePhase })
   }),
 )

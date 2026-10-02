@@ -1,4 +1,4 @@
-// Minimal contract adapter for upstream 5cc99e1; private T3 packages are not dependencies.
+// Minimal contract adapter for upstream 54084ae1; private T3 packages are not dependencies.
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import * as Schema from 'effect/Schema'
 import * as Rpc from 'effect/rpc/Rpc'
@@ -63,6 +63,7 @@ export const Project = Schema.Struct({
   id: Id,
   title: Id,
   workspaceRoot: Id,
+  defaultModelSelection: Schema.optionalKey(Schema.NullOr(ModelSelection)),
   repositoryIdentity: Schema.optionalKey(
     Schema.NullOr(Schema.Struct({ locator: Schema.Struct({ remoteUrl: Id }) })),
   ),
@@ -84,7 +85,24 @@ export const ShellItem = Schema.Union([
     ]),
   }),
 ])
+export const ModelDefaults = Schema.Struct({
+  defaultModelSelection: Schema.NullOr(ModelSelection),
+  projectSettingsOverrides: Schema.optionalKey(
+    Schema.Record(
+      Id,
+      Schema.Struct({
+        defaultModelSelection: Schema.optionalKey(Schema.NullOr(ModelSelection)),
+      }),
+    ),
+  ),
+  projectSettingsFolded: Schema.optionalKey(Schema.Boolean),
+})
 export const group = RpcGroup.make(
+  Rpc.make('server.getSettings', {
+    payload: Schema.Struct({}),
+    success: ModelDefaults,
+    error: Schema.Json,
+  }),
   Rpc.make('orchestration.dispatchCommand', {
     payload: Command,
     success: Schema.Struct({ sequence: Schema.Natural }),

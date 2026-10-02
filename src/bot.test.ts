@@ -12,7 +12,7 @@ import { Settings } from './settings.ts'
 import { T3Auth } from './t3/auth.ts'
 import { T3Client } from './t3/client.ts'
 import { T3Config } from './t3/config.ts'
-import type { Command, Project } from './t3/protocol.ts'
+import type { Command, ModelSelection, Project } from './t3/protocol.ts'
 
 const context: DiscordContext = {
   channelName: 'support',
@@ -35,6 +35,11 @@ const task: PreparedTask = {
 const fixture = Effect.fn('BotTest.fixture')(function* (
   decisions: ReadonlyArray<PreparedTask>,
   clonePhase = 'done',
+  defaultModel: typeof ModelSelection.Type | null = {
+    instanceId: 'configured-provider',
+    model: 'configured-model',
+    options: [{ id: 'reasoningEffort', value: 'medium' }],
+  },
 ) {
   const clones = yield* Ref.make<
     ReadonlyArray<{ projectId: string; destinationPath: string; repository: string }>
@@ -76,6 +81,7 @@ const fixture = Effect.fn('BotTest.fixture')(function* (
     T3Client,
     T3Client.of({
       projects: () => Effect.succeed(projects),
+      defaultModel: () => Effect.succeed(defaultModel),
       dispatch: (command) =>
         Ref.update(commands, (current) => [...current, command]).pipe(Effect.as(1)),
       clone: (request) =>
@@ -118,9 +124,6 @@ const fixture = Effect.fn('BotTest.fixture')(function* (
     guilds: [{ id: 'guild', userIds: ['user'] }],
     discordToken: Redacted.make('fixture'),
     cloneRoot: '/srv/repos',
-    providerInstanceId: 'codex',
-    codingModel: 'gpt-6-luna',
-    codingReasoningEffort: 'xhigh',
     publicUrl: 'https://code.p.si14.space',
     landingUrl: 'https://sunday.example.com',
     environmentId: 'env',
@@ -156,6 +159,11 @@ it.effect(
       )
       expect(new Set(turns.map((command) => command.threadId)).size).toBe(2)
       for (const turn of turns) {
+        expect(turn.modelSelection).toEqual({
+          instanceId: 'configured-provider',
+          model: 'configured-model',
+          options: [{ id: 'reasoningEffort', value: 'medium' }],
+        })
         expect(turn.bootstrap).toEqual({
           createThread: {
             projectId: 'existing-project',
@@ -228,5 +236,16 @@ it.effect('does not start an agent when T3 reports that cloning failed', () =>
     yield* runBot.pipe(Effect.provide(test.layer), Effect.scoped)
     expect(yield* Ref.get(test.commands)).toEqual([])
     expect(yield* Ref.get(test.replies)).toEqual(['Repository clone did not finish: failed.'])
+  }),
+)
+
+it.effect('rejects launch when T3 has no configured default model', () =>
+  Effect.gen(function* () {
+    const test = yield* fixture([task], 'done', null)
+    yield* runBot.pipe(Effect.provide(test.layer), Effect.scoped)
+    expect(yield* Ref.get(test.commands)).toEqual([])
+    expect(yield* Ref.get(test.replies)).toEqual([
+      'No default model is configured in T3. Set a project or environment default in T3, then mention me again.',
+    ])
   }),
 )

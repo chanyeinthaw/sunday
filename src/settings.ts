@@ -11,9 +11,6 @@ export interface BotSettings {
   readonly guilds: ReadonlyArray<GuildRule>
   readonly cloneRoot: string
   readonly discordToken: Redacted.Redacted
-  readonly providerInstanceId: string
-  readonly codingModel: string
-  readonly codingReasoningEffort: 'low' | 'medium' | 'high' | 'xhigh'
   readonly landingUrl: string
   readonly publicUrl: string
   readonly environmentId: string
@@ -30,14 +27,11 @@ export const settingsLayer = Layer.effect(
       guilds: config.discord.guilds,
       discordToken,
       cloneRoot: config.t3.cloneRoot,
-      providerInstanceId: config.t3.providerInstanceId,
       environmentId: config.t3.environmentId,
       landingUrl: new URL(config.landing.publicUrl ?? `http://localhost:${config.landing.port}`)
         .origin,
       publicUrl: new URL(config.t3.publicUrl ?? config.t3.serverUrl).origin,
       runtimeMode: config.t3.runtimeMode,
-      codingModel: config.t3.model,
-      codingReasoningEffort: config.t3.reasoningEffort,
     })
   }),
 )

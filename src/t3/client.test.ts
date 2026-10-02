@@ -10,6 +10,7 @@ import { WebSocketServer } from 'ws'
 import { T3Auth } from './auth.ts'
 import { T3Client, clientLayer } from './client.ts'
 import { T3Config } from './config.ts'
+import type { ModelDefaults } from './protocol.ts'
 
 const isString = Schema.is(Schema.String)
 const Frame = Schema.fromJsonString(
@@ -26,6 +27,21 @@ it.live('uses T3 JSON RPC framing, fresh tickets, and T3-managed task bootstrap'
   Effect.gen(function* () {
     const tickets: Array<string> = []
     const requests: Array<typeof Frame.Type> = []
+    const environmentModel = {
+      instanceId: 'codex',
+      model: 'environment-model',
+      options: [{ id: 'reasoningEffort', value: 'high' }],
+    }
+    const projectModel = {
+      instanceId: 'claude',
+      model: 'project-model',
+      options: [{ id: 'effort', value: 'max' }],
+    }
+    let settings: typeof ModelDefaults.Type = {
+      defaultModelSelection: environmentModel,
+      projectSettingsOverrides: { p: { defaultModelSelection: projectModel } },
+      projectSettingsFolded: true,
+    }
     const server = createServer()
     const sockets = new WebSocketServer({ server })
     yield* Effect.acquireRelease(
@@ -82,9 +98,11 @@ it.live('uses T3 JSON RPC framing, fresh tickets, and T3-managed task bootstrap'
           )
         } else {
           const value =
-            frame.tag === 'projectClone.start'
-              ? { projectId: 'cloned', cwd: '/server/cloned' }
-              : { sequence: 2 }
+            frame.tag === 'server.getSettings'
+              ? settings
+              : frame.tag === 'projectClone.start'
+                ? { projectId: 'cloned', cwd: '/server/cloned' }
+                : { sequence: 2 }
           socket.send(
             JSON.stringify({ _tag: 'Exit', requestId: frame.id, exit: { _tag: 'Success', value } }),
           )
@@ -161,6 +179,21 @@ it.live('uses T3 JSON RPC framing, fresh tickets, and T3-managed task bootstrap'
       expect(requests[2]?.payload).toEqual(cloneRequest)
       expect(requests[1]?.tag).toBe('orchestration.dispatchCommand')
       expect(requests[1]?.payload).toEqual(command)
+      const project = {
+        id: 'p',
+        title: 'repo',
+        workspaceRoot: '/srv/repo',
+        defaultModelSelection: projectModel,
+      }
+      expect(yield* client.defaultModel(project)).toEqual(projectModel)
+      settings = { ...settings, projectSettingsOverrides: {} }
+      expect(yield* client.defaultModel(project)).toEqual(environmentModel)
+      settings = { ...settings, projectSettingsFolded: false }
+      expect(yield* client.defaultModel(project)).toEqual(projectModel)
+      settings = { ...settings, projectSettingsOverrides: { p: { defaultModelSelection: null } } }
+      expect(yield* client.defaultModel(project)).toBeNull()
+      settings = { defaultModelSelection: null, projectSettingsFolded: true }
+      expect(yield* client.defaultModel(project)).toBeNull()
     }).pipe(Effect.provide(clientLayer.pipe(Layer.provide(auth), Layer.provide(config))))
   }),
 )

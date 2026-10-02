@@ -39,7 +39,7 @@ Set the LLM API key environment variable from Fleet's `agents/cpa1-api-key` gopa
 
 `t3.publicUrl` controls the T3 links sent to Discord; it defaults to `t3.serverUrl`. The example uses `https://code.p.si14.space` for links and `http://localhost:3773` for the API connection. `t3.runtimeMode` is `full-access` in the example.
 
-Confirm `t3.providerInstanceId` against the server's configured provider instance. Both models and reasoning effort are specified in JSON; the example uses `gpt-6-luna` with `xhigh`.
+Sunday's internal context preparation uses `llm.model` and `llm.reasoningEffort`, with `gpt-6-luna` and `xhigh` in the example. Coding uses T3's project default model and options, falling back to its environment default. Configure these in T3; Sunday rejects launch if no default is configured.
 
 T3 manages task worktrees and setup scripts through its WebSocket turn-start bootstrap. Configure `t3.cloneRoot` as an absolute directory on the T3 host for missing repositories. The bot supplies `<cloneRoot>/<owner>/<repo>` to T3's clone method and waits for completion before launching the task. T3 performs the clone and registers the project. Existing projects keep their checkout location. The bot supplies a unique `sunday/<threadId>` branch for each task and does not configure or allocate worktree paths. Clone path validation is lexical; keep the clone root free of symlinks that escape it.
 
@@ -81,7 +81,7 @@ pnpm build
 
 `pnpm verify` runs formatting, lint, typechecking, and focused Effect tests. `pnpm build` produces one Linux x64 baseline executable including the Bun runtime. The executable does not require Bun, Node.js, or node_modules; supply the JSON configuration file and referenced environment variables.
 
-The T3 adapter targets upstream `pingdotgg/t3code` main at `5cc99e1c23980d7995a13c47f969b47cb68ed1be`, checked on 2026-10-02. It uses JSON WebSocket RPC with a fresh ticket per connection. Mutating calls are not automatically replayed after an ambiguous response. Inspect T3 before retrying such a task.
+The T3 adapter targets upstream `pingdotgg/t3code` main at `54084ae1e6c32809db040e4fa571c80fdf2d8ae4`, checked on 2026-10-02. It uses JSON WebSocket RPC with a fresh ticket per connection. Mutating calls are not automatically replayed after an ambiguous response. Inspect T3 before retrying such a task.
 
 Pull requests run the `Verify and build` check, including `pnpm verify`, compilation, and binary packaging. Configure this check as required in GitHub branch protection to gate merges.
 

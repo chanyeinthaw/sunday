@@ -15,10 +15,7 @@
     "serverUrl": "http://localhost:3773",
     "stateDirectory": "/home/chanyeinthaw/.local/state/sunday",
     "environmentId": "a9a5d4b6-301e-4c26-834f-3b2c2650da61",
-    "providerInstanceId": "codex",
     "cloneRoot": "/home/chanyeinthaw/Projects/sunday-workspaces/repos",
-    "model": "gpt-6-luna",
-    "reasoningEffort": "xhigh",
     "runtimeMode": "full-access",
     "publicUrl": "https://code.p.si14.space"
   },
