@@ -20,6 +20,7 @@ Updated 2026-10-02 after scope alignment with Chan.
 - Upstream main was checked again and still resolves to `5cc99e1c23980d7995a13c47f969b47cb68ed1be`. The outdated local T3 repository was not used.
 - `pnpm verify` and `pnpm build` pass, with 18 focused tests. A live CPA preparation call using `gpt-6-luna` at `xhigh` correctly rejected an ambiguous target. Discord/T3 end-to-end testing awaits the new bot token and a privileged T3 pairing credential.
 - GitHub Actions CI verifies, builds, and packages the binary on PRs. Releases on `v*` tag pushes reuse CI and publish the Linux x64 archive plus SHA256 checksums after success. Branch protection must require the CI check when a GitHub remote is configured.
+- Sunday serves an app-opening HTML page on loopback landing.port through Effect HTTP and Bun. Optional landing.publicUrl supplies the external origin for Discord links, defaulting to http://localhost:<landing.port>; the page links to the mobile custom scheme and the web UI.
 - Linear remains unimplemented until Discord is tested end to end.
 
 The sections below retain the original API findings and bootstrap record. Chan's current scope above overrides older recommendations for persistent job storage and source-platform follow-ups.

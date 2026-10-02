@@ -93,3 +93,7 @@ git push origin v0.0.0-nightly.1
 ```
 
 Tags containing a hyphen, such as `v0.0.0-nightly.1`, publish as prereleases and are not marked as the latest stable release.
+
+## App-opening page
+
+Sunday serves `/open/<environmentId>/<threadId>` on `127.0.0.1` at `landing.port`. Set optional `landing.publicUrl` to Sunday’s external HTTPS origin, including a port if needed. When omitted, it defaults to `http://localhost:<landing.port>`. For example: `"landing": { "port": 3784, "publicUrl": "https://sunday.example.com" }`. Discord's **Open in app** link uses `/app/<environmentId>/<threadId>`, which immediately sends a 302 redirect to `t3code://threads/...`. The `/open/...` button page remains available if an in-app browser blocks the redirect; **Open in web** uses `t3.publicUrl`. The mobile app must already have the T3 environment paired. The page is served by the same `run` process as the bot.

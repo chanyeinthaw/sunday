@@ -188,7 +188,7 @@ export const runBot = Effect.gen(function* () {
     yield* Effect.logInfo('task.started').pipe(
       Effect.annotateLogs({ eventId: message.id, threadId, channelId }),
     )
-    const appLink = `t3code://threads/${encodeURIComponent(settings.environmentId)}/${encodeURIComponent(threadId)}`
+    const appLink = `${settings.landingUrl}/app/${encodeURIComponent(settings.environmentId)}/${encodeURIComponent(threadId)}`
     yield* discord.reply(
       message,
       `Started: ${task.title}\n[Open in app](${appLink}) · [Open in web](${threadLink(threadId)})`,

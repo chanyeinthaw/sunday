@@ -12,6 +12,7 @@ import * as CliError from 'effect/cli/CliError'
 import * as FetchHttpClient from 'effect/http/FetchHttpClient'
 import packageJson from '../package.json'
 import { appConfigLayer } from './app-config.ts'
+import { landingLayer } from './landing.ts'
 import { fileLoggingLayer } from './logging.ts'
 import { runBot } from './bot.ts'
 import { discordLayer } from './discord.ts'
@@ -31,6 +32,7 @@ const authDependencies = Layer.mergeAll(authApiLayer, credentialStoreLayer).pipe
 const auth = authLayer.pipe(Layer.provide(authDependencies), Layer.provide(configLayer))
 const client = clientLayer.pipe(Layer.provide(auth), Layer.provide(configLayer))
 const bot = Layer.mergeAll(
+  landingLayer,
   client,
   auth,
   discordLayer.pipe(Layer.provide(settingsLayer)),

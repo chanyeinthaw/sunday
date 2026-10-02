@@ -45,6 +45,7 @@ it.effect('loads multiple guilds and resolves a secret by its configured environ
     )
     yield* Effect.gen(function* () {
       const settings = yield* Settings
+      expect(settings.landingUrl).toBe(`http://localhost:${example.landing.port}`)
       expect(settings.guilds).toEqual(guilds)
       expect(Redacted.value(settings.discordToken)).toBe('fake-secret')
       expect(isAllowedUser(settings.guilds, '842724454677348352', '435482941515104257')).toBe(true)
@@ -96,5 +97,22 @@ it.effect('fails clearly when a referenced secret is absent', () =>
       Effect.flip,
     )
     expect(failure).toMatchObject({ reason: 'missing-secret', location: 'MISSING_TOKEN' })
+  }),
+)
+
+it.effect('uses the configured Sunday origin including its external port', () =>
+  Effect.gen(function* () {
+    const example = yield* exampleConfiguration
+    const config = Layer.succeed(AppConfig, {
+      ...example,
+      landing: { port: 3784, publicUrl: 'https://sunday.example.com:8443' },
+    })
+    const provider = ConfigProvider.layer(
+      ConfigProvider.fromUnknown({ DISCORD_BOT_TOKEN: 'fixture' }),
+    )
+    yield* Effect.gen(function* () {
+      const settings = yield* Settings
+      expect(settings.landingUrl).toBe('https://sunday.example.com:8443')
+    }).pipe(Effect.provide(settingsLayer.pipe(Layer.provide(config), Layer.provide(provider))))
   }),
 )

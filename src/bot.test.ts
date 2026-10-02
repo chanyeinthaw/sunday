@@ -122,6 +122,7 @@ const fixture = Effect.fn('BotTest.fixture')(function* (
     codingModel: 'gpt-6-luna',
     codingReasoningEffort: 'xhigh',
     publicUrl: 'https://code.p.si14.space',
+    landingUrl: 'https://sunday.example.com',
     environmentId: 'env',
     runtimeMode: 'approval-required',
   })
@@ -150,7 +151,7 @@ it.effect(
       expect(yield* Ref.get(test.replies)).toEqual(
         turns.map(
           (turn) =>
-            `Started: ${task.title}\n[Open in app](t3code://threads/env/${turn.threadId}) · [Open in web](https://code.p.si14.space/env/${turn.threadId})`,
+            `Started: ${task.title}\n[Open in app](https://sunday.example.com/app/env/${turn.threadId}) · [Open in web](https://code.p.si14.space/env/${turn.threadId})`,
         ),
       )
       expect(new Set(turns.map((command) => command.threadId)).size).toBe(2)

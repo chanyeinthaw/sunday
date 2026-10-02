@@ -59,6 +59,10 @@ export const Configuration = Schema.Struct({
     model: Schema.NonEmptyString,
     reasoningEffort: Schema.Literals(['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']),
   }),
+  landing: Schema.Struct({
+    port: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65535 })),
+    publicUrl: Schema.optionalKey(ServerOrigin),
+  }),
   github: Schema.Struct({ token: Schema.NullOr(EnvReference) }),
   logging: Schema.Struct({
     file: AbsolutePath,
