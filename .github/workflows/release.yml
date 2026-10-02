@@ -36,5 +36,9 @@ jobs:
         run: |
           cd dist
           sha256sum --check SHA256SUMS
+          release_flags=()
+          if [[ "$RELEASE_TAG" == *-* ]]; then
+            release_flags+=(--prerelease --latest=false)
+          fi
           gh release create "$RELEASE_TAG" sunday-linux-x64.tar.gz SHA256SUMS \
-            --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes --title "$RELEASE_TAG"
+            --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes --title "$RELEASE_TAG" "${release_flags[@]}"

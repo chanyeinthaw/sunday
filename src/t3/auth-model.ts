@@ -3,7 +3,7 @@ import * as Schema from 'effect/Schema'
 const Secret = Schema.RedactedFromValue(Schema.NonEmptyString)
 const Timestamp = Schema.Number.check(Schema.isFinite(), Schema.isGreaterThan(0))
 
-export const requiredScopes = ['orchestration:read', 'orchestration:operate', 'access:write']
+export const requiredScopes = ['orchestration:read', 'orchestration:operate']
 
 export const Credential = Schema.Struct({
   version: Schema.Literal(1),
@@ -40,6 +40,8 @@ export class AuthError extends Schema.TaggedError<AuthError>()('AuthError', {
   reason: Schema.Literals([
     'transport',
     'rejected',
+    'invalid-credential',
+    'scope-not-granted',
     'invalid-response',
     'missing-scopes',
     'manual-pairing-required',

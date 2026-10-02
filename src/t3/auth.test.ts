@@ -19,14 +19,14 @@ const initial: Credential = {
   accessToken: Redacted.make('old-secret'),
   expiresAt: now + 60000,
   renewAt: now - 1,
-  scope: requiredScopes.join(' '),
+  scope: [...requiredScopes, 'access:write'].join(' '),
 }
 const token = {
   access_token: Redacted.make('new-secret'),
   issued_token_type: 'urn:ietf:params:oauth:token-type:access_token',
   token_type: 'Bearer',
   expires_in: 172800,
-  scope: requiredScopes.join(' '),
+  scope: [...requiredScopes, 'access:write'].join(' '),
 }
 
 const setup = Effect.gen(function* () {
@@ -132,3 +132,27 @@ describe('T3 credential rotation', () => {
     }),
   )
 })
+
+it.effect('uses a normal paired credential until expiry without requesting access management', () =>
+  Effect.gen(function* () {
+    const fixture = yield* setup
+    const normal: Credential = {
+      version: 1,
+      origin: initial.origin,
+      accessToken: initial.accessToken,
+      expiresAt: initial.expiresAt,
+      renewAt: initial.renewAt,
+      scope: requiredScopes.join(' '),
+    }
+    yield* Ref.set(fixture.saved, Option.some(normal))
+    yield* Effect.gen(function* () {
+      const auth = yield* T3Auth
+      expect(yield* auth.credential()).toEqual(normal)
+      expect(yield* Ref.get(fixture.rotations)).toBe(0)
+      yield* TestClock.setTime(normal.expiresAt)
+      expect(yield* auth.credential().pipe(Effect.flip)).toMatchObject({
+        reason: 'manual-pairing-required',
+      })
+    }).pipe(Effect.provide(fixture.layer))
+  }),
+)

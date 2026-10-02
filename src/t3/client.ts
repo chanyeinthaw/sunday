@@ -12,7 +12,7 @@ import * as RpcSerialization from 'effect/rpc/RpcSerialization'
 import { T3Auth } from './auth.ts'
 import { T3Config } from './config.ts'
 import { AuthError, CredentialError } from './auth-model.ts'
-import { Command, Project, ThreadSnapshot, group } from './protocol.ts'
+import { Command, Project, group } from './protocol.ts'
 
 export class T3Error extends Schema.TaggedError<T3Error>()('T3Error', {
   operation: Schema.String,
@@ -33,7 +33,6 @@ interface ClientMethods {
     request: CloneRequest,
   ) => Effect.Effect<{ readonly projectId: string; readonly cwd: string }, Failure>
   readonly clonePhase: (projectId: string) => Effect.Effect<string, Failure>
-  readonly thread: (threadId: string) => Effect.Effect<typeof ThreadSnapshot.Type, Failure>
 }
 export class T3Client extends Context.Service<T3Client, ClientMethods>()('sunday/T3Client') {}
 
@@ -114,22 +113,6 @@ export const clientLayer = Layer.effect(
       Effect.timeout('30 seconds'),
       Effect.mapError(() => new T3Error({ operation: 'clonePhase' })),
     )
-    const thread = Effect.fn('T3Client.thread')(
-      function* (threadId: string) {
-        const client = yield* connect()
-        const result = yield* client['orchestration.subscribeThread']({ threadId }).pipe(
-          Stream.filter((item) => item.kind === 'snapshot'),
-          Stream.runHead,
-          Effect.mapError(() => new T3Error({ operation: 'thread' })),
-        )
-        if (Option.isNone(result) || result.value.kind !== 'snapshot')
-          return yield* new T3Error({ operation: 'thread' })
-        return result.value.snapshot
-      },
-      Effect.scoped,
-      Effect.timeout('30 seconds'),
-      Effect.mapError(() => new T3Error({ operation: 'thread' })),
-    )
-    return T3Client.of({ projects, dispatch, clone, clonePhase, thread })
+    return T3Client.of({ projects, dispatch, clone, clonePhase })
   }),
 )

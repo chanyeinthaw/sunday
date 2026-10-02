@@ -82,13 +82,16 @@ it.live('uses OAuth form encoding, explicit renewal scopes, and redacted secrets
       const token = yield* api.exchange(Redacted.make('initial+&secret'))
       expect(JSON.stringify(token)).not.toContain('bearer-secret')
       expect(new URLSearchParams(received[0]?.body).get('subject_token')).toBe('initial+&secret')
+      expect(new URLSearchParams(received[0]?.body).get('scope')).toBe(
+        'orchestration:read orchestration:operate',
+      )
       expect(received[0]?.contentType).toContain('application/x-www-form-urlencoded')
       yield* api.pairing(token.access_token)
       yield* api.ticket(token.access_token)
       expect(received[1]?.authorization).toBe('Bearer bearer-secret')
       expect(JSON.parse(received[1]?.body ?? '{}')).toEqual({
         label: 'sunday renewal',
-        scopes: requiredScopes,
+        scopes: [...requiredScopes, 'access:write'],
       })
       expect(received[2]?.path).toBe('/api/auth/websocket-ticket')
       invalidScopes = true

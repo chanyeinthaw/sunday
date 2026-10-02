@@ -10,7 +10,6 @@ import { GitHub, type RepositoryInfo } from './github.ts'
 import { Preparation, type PreparedTask } from './preparation.ts'
 import { Settings, pathWithin } from './settings.ts'
 import { T3Client } from './t3/client.ts'
-import { T3Config } from './t3/config.ts'
 import { T3Auth } from './t3/auth.ts'
 import type { Project } from './t3/protocol.ts'
 
@@ -37,7 +36,6 @@ export const runBot = Effect.gen(function* () {
   const github = yield* GitHub
   const preparation = yield* Preparation
   const settings = yield* Settings
-  const config = yield* T3Config
   const seen = yield* Ref.make<ReadonlyArray<string>>([])
   const launchLock = yield* Semaphore.make(1)
   const modelSelection = {
@@ -46,7 +44,7 @@ export const runBot = Effect.gen(function* () {
     options: [{ id: 'reasoningEffort', value: settings.codingReasoningEffort }],
   }
   const threadLink = (threadId: string) =>
-    `${config.origin}/${encodeURIComponent(settings.environmentId)}/${encodeURIComponent(threadId)}`
+    `${settings.publicUrl}/${encodeURIComponent(settings.environmentId)}/${encodeURIComponent(threadId)}`
 
   const resolveProject = Effect.fn('Bot.resolveProject')(function* (repository: RepositoryInfo) {
     const projects = yield* t3.projects()
@@ -113,50 +111,6 @@ export const runBot = Effect.gen(function* () {
     }
   })
 
-  const watch = Effect.fn('Bot.watch')(function* (
-    channelId: string,
-    threadId: string,
-    messageId: string,
-  ) {
-    const notified = yield* Ref.make<ReadonlyArray<string>>([])
-    const pass = Effect.gen(function* () {
-      // Reads can reconnect safely; turn dispatch is never retried on an ambiguous response.
-      const snapshot = yield* t3
-        .thread(threadId)
-        .pipe(Effect.retry(Schedule.spaced('2 seconds').pipe(Schedule.upTo({ times: 3 }))))
-      const requested = snapshot.thread.messages.find((message) => message.id === messageId)
-      if (!requested) return false
-      const turn = snapshot.thread.latestTurn
-      if (turn && turn.requestedAt < requested.createdAt) return false
-      for (const activity of snapshot.thread.activities.filter(
-        (item) => item.tone === 'approval' && item.turnId === turn?.turnId,
-      )) {
-        if (!(yield* Ref.get(notified)).includes(activity.id)) {
-          yield* discord.send(
-            channelId,
-            `${activity.summary}\nRespond in T3: ${threadLink(threadId)}`,
-          )
-          yield* Ref.update(notified, (ids) => [...ids, activity.id])
-        }
-      }
-      if (!turn || turn.state === 'running') return false
-      yield* Effect.logInfo('task.finished').pipe(
-        Effect.annotateLogs({ threadId, channelId, state: turn.state }),
-      )
-      const response = snapshot.thread.messages
-        .toReversed()
-        .find((message) => message.role === 'assistant' && message.turnId === turn.turnId)
-      yield* discord.send(
-        channelId,
-        `${turn.state === 'completed' ? 'Completed' : turn.state}.\n${response?.text ?? snapshot.thread.session?.lastError ?? ''}\n${threadLink(threadId)}`,
-      )
-      return true
-    })
-    yield* pass.pipe(
-      Effect.repeat({ schedule: Schedule.spaced('5 seconds'), until: (done) => done }),
-    )
-  })
-
   const handle = Effect.fn('Bot.handle')(function* (message: DiscordMention) {
     const firstDelivery = yield* Ref.modify(seen, (ids) =>
       ids.includes(message.id) ? [false, ids] : [true, [...ids.slice(-999), message.id]],
@@ -178,8 +132,8 @@ export const runBot = Effect.gen(function* () {
     const task = yield* preparation.prepare(message.content, context, projects)
     if (task.kind === 'reject') {
       yield* Effect.logWarning('task.rejected').pipe(Effect.annotateLogs({ eventId: message.id }))
-      yield* discord.send(
-        message.channelId,
+      yield* discord.reply(
+        message,
         `${task.reason}\nMention me again with a repository URL or T3 project name.`,
       )
       return
@@ -187,7 +141,7 @@ export const runBot = Effect.gen(function* () {
     yield* Effect.logInfo('task.prepared').pipe(
       Effect.annotateLogs({ eventId: message.id, targetKind: task.target.kind }),
     )
-    const channelId = yield* discord.conversation(message)
+    const channelId = message.channelId
     const threadId = crypto.randomUUID()
     const messageId = crypto.randomUUID()
     yield* launchLock.withPermit(
@@ -221,6 +175,7 @@ export const runBot = Effect.gen(function* () {
             prepareWorktree: {
               projectCwd: target.project.workspaceRoot,
               baseBranch: target.baseBranch,
+              branch: `sunday/${threadId}`,
               startFromOrigin: task.target.kind === 'repository',
               requireWorktree: true,
             },
@@ -233,19 +188,7 @@ export const runBot = Effect.gen(function* () {
     yield* Effect.logInfo('task.started').pipe(
       Effect.annotateLogs({ eventId: message.id, threadId, channelId }),
     )
-    yield* discord.send(channelId, `Started: ${task.title}\n${threadLink(threadId)}`)
-    yield* watch(channelId, threadId, messageId).pipe(
-      Effect.catch((error) =>
-        Effect.gen(function* () {
-          yield* Effect.logError('task.progress_failed', error)
-          yield* discord.send(
-            channelId,
-            `Progress connection failed (${error._tag}). Check T3: ${threadLink(threadId)}`,
-          )
-        }),
-      ),
-      Effect.forkScoped,
-    )
+    yield* discord.reply(message, `Started: ${task.title}\n${threadLink(threadId)}`)
   })
 
   yield* auth.credential()
@@ -264,8 +207,8 @@ export const runBot = Effect.gen(function* () {
               yield* Effect.logError('task.failed', error).pipe(
                 Effect.annotateLogs({ eventId: message.id, channelId: message.channelId }),
               )
-              yield* discord.send(
-                message.channelId,
+              yield* discord.reply(
+                message,
                 error instanceof BotError
                   ? error.message
                   : `Task failed (${error._tag}). Check T3 before retrying.`,

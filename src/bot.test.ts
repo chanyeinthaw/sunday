@@ -55,8 +55,7 @@ const fixture = Effect.fn('BotTest.fixture')(function* (
         })),
       ),
       context: () => Effect.succeed(context),
-      conversation: (message) => Effect.succeed(message.channelId),
-      send: (_, text) => Ref.update(replies, (current) => [...current, text]),
+      reply: (_, text) => Ref.update(replies, (current) => [...current, text]),
     }),
   )
   const preparation = Layer.succeed(
@@ -84,7 +83,6 @@ const fixture = Effect.fn('BotTest.fixture')(function* (
           Effect.as({ projectId: request.projectId, cwd: '/server/returned-checkout' }),
         ),
       clonePhase: () => Effect.succeed(clonePhase),
-      thread: () => Effect.never,
     }),
   )
   const auth = Layer.succeed(
@@ -123,6 +121,7 @@ const fixture = Effect.fn('BotTest.fixture')(function* (
     providerInstanceId: 'codex',
     codingModel: 'gpt-6-luna',
     codingReasoningEffort: 'xhigh',
+    publicUrl: 'https://code.p.si14.space',
     environmentId: 'env',
     runtimeMode: 'approval-required',
   })
@@ -148,6 +147,11 @@ it.effect(
       const commands = yield* Ref.get(test.commands)
       const turns = commands.filter((command) => command.type === 'thread.turn.start')
       expect(turns).toHaveLength(2)
+      expect(yield* Ref.get(test.replies)).toEqual(
+        turns.map(
+          (turn) => `Started: ${task.title}\nhttps://code.p.si14.space/env/${turn.threadId}`,
+        ),
+      )
       expect(new Set(turns.map((command) => command.threadId)).size).toBe(2)
       for (const turn of turns) {
         expect(turn.bootstrap).toEqual({
@@ -164,6 +168,7 @@ it.effect(
           prepareWorktree: {
             projectCwd: '/srv/app',
             baseBranch: 'HEAD',
+            branch: `sunday/${turn.threadId}`,
             startFromOrigin: false,
             requireWorktree: true,
           },
@@ -205,6 +210,7 @@ it.effect('clones a missing repository through T3 and bootstraps from the return
     expect(commands[0]?.bootstrap?.prepareWorktree).toEqual({
       projectCwd: '/server/returned-checkout',
       baseBranch: 'main',
+      branch: `sunday/${commands[0]?.threadId}`,
       startFromOrigin: true,
       requireWorktree: true,
     })

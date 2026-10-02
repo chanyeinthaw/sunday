@@ -32,8 +32,7 @@ export interface DiscordContext {
 interface DiscordMethods {
   readonly mentions: Stream.Stream<DiscordMention>
   readonly context: (message: DiscordMention) => Effect.Effect<DiscordContext, DiscordError>
-  readonly conversation: (message: DiscordMention) => Effect.Effect<string, DiscordError>
-  readonly send: (channelId: string, text: string) => Effect.Effect<void, DiscordError>
+  readonly reply: (message: DiscordMention, text: string) => Effect.Effect<void, DiscordError>
 }
 export class Discord extends Context.Service<Discord, DiscordMethods>()('sunday/Discord') {}
 export function isAllowedUser(
@@ -131,40 +130,27 @@ export const discordLayer = Layer.effect(
           })),
       }
     })
-    const conversation = Effect.fn('Discord.conversation')(function* (mention: DiscordMention) {
-      const channel = yield* getChannel(mention.channelId)
-      if (channel.isThread()) return mention.channelId
-      const message = yield* Effect.tryPromise({
-        try: () => channel.messages.fetch(mention.id),
-        catch: () => new DiscordError({ operation: 'mention message' }),
-      })
-      const thread = yield* Effect.tryPromise({
-        try: () =>
-          message.startThread({
-            name: mention.content.slice(0, 90) || 'Coding task',
-            autoArchiveDuration: 1440,
-          }),
-        catch: () => new DiscordError({ operation: 'create thread' }),
-      })
-      return thread.id
-    })
-    const send = Effect.fn('Discord.send')(function* (channelId: string, text: string) {
+    const reply = Effect.fn('Discord.reply')(function* (message: DiscordMention, text: string) {
       const channel = yield* Effect.tryPromise({
-        try: () => client.channels.fetch(channelId),
-        catch: () => new DiscordError({ operation: 'send' }),
+        try: () => client.channels.fetch(message.channelId),
+        catch: () => new DiscordError({ operation: 'reply' }),
       })
-      if (!channel?.isSendable()) return yield* new DiscordError({ operation: 'send' })
+      if (!channel?.isSendable()) return yield* new DiscordError({ operation: 'reply' })
       const chunks = text.match(/[\s\S]{1,1900}/gu) ?? ['']
       // Send in order; parallel sends can reorder a split reply.
       for (const content of chunks.slice(0, 8)) {
         yield* Effect.tryPromise({
           try: async () => {
-            await channel.send({ content, allowedMentions: { parse: [] } })
+            await channel.send({
+              content,
+              reply: { messageReference: message.id, failIfNotExists: false },
+              allowedMentions: { parse: [], repliedUser: false },
+            })
           },
-          catch: () => new DiscordError({ operation: 'send' }),
+          catch: () => new DiscordError({ operation: 'reply' }),
         })
       }
     })
-    return Discord.of({ mentions: Stream.fromQueue(inbox), context, conversation, send })
+    return Discord.of({ mentions: Stream.fromQueue(inbox), context, reply })
   }),
 )

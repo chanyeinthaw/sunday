@@ -14,6 +14,7 @@ export interface BotSettings {
   readonly providerInstanceId: string
   readonly codingModel: string
   readonly codingReasoningEffort: 'low' | 'medium' | 'high' | 'xhigh'
+  readonly publicUrl: string
   readonly environmentId: string
   readonly runtimeMode: 'approval-required' | 'auto-accept-edits' | 'auto' | 'full-access'
 }
@@ -30,6 +31,7 @@ export const settingsLayer = Layer.effect(
       cloneRoot: config.t3.cloneRoot,
       providerInstanceId: config.t3.providerInstanceId,
       environmentId: config.t3.environmentId,
+      publicUrl: new URL(config.t3.publicUrl ?? config.t3.serverUrl).origin,
       runtimeMode: config.t3.runtimeMode,
       codingModel: config.t3.model,
       codingReasoningEffort: config.t3.reasoningEffort,

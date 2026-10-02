@@ -44,6 +44,7 @@ export const Configuration = Schema.Struct({
   }),
   t3: Schema.Struct({
     serverUrl: ServerOrigin,
+    publicUrl: Schema.optionalKey(ServerOrigin),
     stateDirectory: AbsolutePath,
     environmentId: Schema.NonEmptyString,
     providerInstanceId: Schema.NonEmptyString,

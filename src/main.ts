@@ -10,6 +10,7 @@ import * as Stream from 'effect/Stream'
 import * as Command from 'effect/cli/Command'
 import * as CliError from 'effect/cli/CliError'
 import * as FetchHttpClient from 'effect/http/FetchHttpClient'
+import packageJson from '../package.json'
 import { appConfigLayer } from './app-config.ts'
 import { fileLoggingLayer } from './logging.ts'
 import { runBot } from './bot.ts'
@@ -60,13 +61,13 @@ const pair = Command.make('pair', {}, () =>
       if (!grant)
         return yield* new CliError.UserError({
           cause: 'Missing pairing credential',
-          userMessage: 'Pipe a privileged T3 pairing credential to stdin.',
+          userMessage: 'Pipe a T3 pairing code to stdin.',
         })
       yield* service.pair(Redacted.make(grant))
       yield* Console.log('T3 pairing saved.')
     }).pipe(Effect.provide(auth)),
   ),
-).pipe(Command.withDescription('Exchange a privileged T3 pairing credential from stdin.'))
+).pipe(Command.withDescription('Exchange a T3 pairing code from stdin.'))
 
 const run = Command.make('run', {}, () => configured('run', runBot.pipe(Effect.provide(bot)))).pipe(
   Command.withDescription('Run the Discord bot.'),
@@ -79,4 +80,6 @@ const cli = Command.make('sunday').pipe(
   Command.withSubcommands([pair, run]),
 )
 
-BunRuntime.runMain(Command.run(cli, { version: '0.1.0' }).pipe(Effect.provide(BunServices.layer)))
+BunRuntime.runMain(
+  Command.run(cli, { version: packageJson.version }).pipe(Effect.provide(BunServices.layer)),
+)

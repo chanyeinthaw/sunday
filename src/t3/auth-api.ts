@@ -3,6 +3,8 @@
 import * as Context from 'effect/Context'
 import * as Effect from 'effect/Effect'
 import * as Layer from 'effect/Layer'
+import * as Option from 'effect/Option'
+import * as Schema from 'effect/Schema'
 import type * as Redacted from 'effect/Redacted'
 import * as RedactedValue from 'effect/Redacted'
 import * as HttpClient from 'effect/http/HttpClient'
@@ -17,6 +19,11 @@ import {
   requiredScopes,
 } from './auth-model.ts'
 
+const decodeRejection = HttpClientResponse.schemaBodyJson(
+  Schema.Struct({
+    reason: Schema.Literals(['invalid_credential', 'scope_not_granted']),
+  }),
+)
 const decodeToken = HttpClientResponse.schemaBodyJson(TokenResponse)
 const decodePairing = HttpClientResponse.schemaBodyJson(PairingResponse)
 const decodeTicket = HttpClientResponse.schemaBodyJson(TicketResponse)
@@ -24,6 +31,7 @@ const decodeTicket = HttpClientResponse.schemaBodyJson(TicketResponse)
 interface AuthApiMethods {
   readonly exchange: (
     grant: Redacted.Redacted<string>,
+    scopes?: ReadonlyArray<string>,
   ) => Effect.Effect<typeof TokenResponse.Type, AuthError>
   readonly pairing: (
     token: Redacted.Redacted<string>,
@@ -47,15 +55,23 @@ export const authApiLayer = Layer.effect(
         Effect.mapError(() => new AuthError({ operation: 'request', reason: 'transport' })),
       )
       if (response.status < 200 || response.status >= 300) {
+        const rejection = yield* decodeRejection(response).pipe(Effect.option)
         return yield* new AuthError({
           operation: 'request',
-          reason: 'rejected',
+          reason: Option.isNone(rejection)
+            ? 'rejected'
+            : rejection.value.reason === 'scope_not_granted'
+              ? 'scope-not-granted'
+              : 'invalid-credential',
           status: response.status,
         })
       }
       return response
     })
-    const exchange = Effect.fn('AuthApi.exchange')(function* (grant: Redacted.Redacted<string>) {
+    const exchange = Effect.fn('AuthApi.exchange')(function* (
+      grant: Redacted.Redacted<string>,
+      requestedScopes: ReadonlyArray<string> = requiredScopes,
+    ) {
       const response = yield* execute(
         HttpClientRequest.post(`${config.origin}/oauth/token`).pipe(
           HttpClientRequest.bodyUrlParams({
@@ -63,7 +79,7 @@ export const authApiLayer = Layer.effect(
             subject_token: RedactedValue.value(grant),
             subject_token_type: 'urn:t3:params:oauth:token-type:environment-bootstrap',
             requested_token_type: 'urn:ietf:params:oauth:token-type:access_token',
-            scope: requiredScopes.join(' '),
+            scope: requestedScopes.join(' '),
             client_label: 'sunday',
             client_device_type: 'bot',
           }),
@@ -73,7 +89,7 @@ export const authApiLayer = Layer.effect(
         Effect.mapError(() => new AuthError({ operation: 'exchange', reason: 'invalid-response' })),
       )
       const scopes = new Set(token.scope.split(' '))
-      if (!requiredScopes.every((scope) => scopes.has(scope))) {
+      if (!requestedScopes.every((scope) => scopes.has(scope))) {
         return yield* new AuthError({ operation: 'exchange', reason: 'missing-scopes' })
       }
       return token
@@ -81,7 +97,10 @@ export const authApiLayer = Layer.effect(
     const pairing = Effect.fn('AuthApi.pairing')(function* (token: Redacted.Redacted<string>) {
       const request = yield* HttpClientRequest.post(`${config.origin}/api/auth/pairing-token`).pipe(
         HttpClientRequest.bearerToken(token),
-        HttpClientRequest.bodyJson({ label: 'sunday renewal', scopes: requiredScopes }),
+        HttpClientRequest.bodyJson({
+          label: 'sunday renewal',
+          scopes: [...requiredScopes, 'access:write'],
+        }),
         Effect.mapError(() => new AuthError({ operation: 'pairing', reason: 'invalid-response' })),
       )
       const response = yield* execute(request)

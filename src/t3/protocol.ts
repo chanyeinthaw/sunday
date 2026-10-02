@@ -84,36 +84,6 @@ export const ShellItem = Schema.Union([
     ]),
   }),
 ])
-export const ThreadSnapshot = Schema.Struct({
-  snapshotSequence: Schema.Natural,
-  thread: Schema.Struct({
-    id: Id,
-    latestTurn: Schema.NullOr(
-      Schema.Struct({
-        state: Schema.Literals(['running', 'completed', 'interrupted', 'error']),
-        turnId: Id,
-        requestedAt: Id,
-      }),
-    ),
-    session: Schema.NullOr(Schema.Struct({ status: Id, lastError: Schema.NullOr(Schema.String) })),
-    messages: Schema.Array(
-      Schema.Struct({
-        id: Id,
-        role: Id,
-        text: Schema.String,
-        turnId: Schema.NullOr(Id),
-        createdAt: Id,
-      }),
-    ),
-    activities: Schema.Array(
-      Schema.Struct({ id: Id, tone: Id, summary: Schema.String, turnId: Schema.NullOr(Id) }),
-    ),
-  }),
-})
-export const ThreadItem = Schema.Union([
-  Schema.Struct({ kind: Schema.Literal('snapshot'), snapshot: ThreadSnapshot }),
-  Schema.Struct({ kind: Schema.Literals(['event', 'synchronized']) }),
-])
 export const group = RpcGroup.make(
   Rpc.make('orchestration.dispatchCommand', {
     payload: Command,
@@ -123,12 +93,6 @@ export const group = RpcGroup.make(
   Rpc.make('orchestration.subscribeShell', {
     payload: Schema.Struct({}),
     success: ShellItem,
-    error: Schema.Json,
-    stream: true,
-  }),
-  Rpc.make('orchestration.subscribeThread', {
-    payload: Schema.Struct({ threadId: Id }),
-    success: ThreadItem,
     error: Schema.Json,
     stream: true,
   }),

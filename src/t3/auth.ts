@@ -36,10 +36,11 @@ export const authLayer = Layer.effect(
     const mutex = yield* Semaphore.make(1)
     const exchangeAndPersist = Effect.fn('T3Auth.exchangeAndPersist')(function* (
       grant: Redacted.Redacted<string>,
+      scopes: ReadonlyArray<string> = requiredScopes,
     ) {
       // Use the time before the request so network latency never extends token validity.
       const startedAt = yield* Clock.currentTimeMillis
-      const response = yield* api.exchange(grant)
+      const response = yield* api.exchange(grant, scopes)
       const credential: Credential = {
         version: 1,
         origin: config.origin,
@@ -57,8 +58,13 @@ export const authLayer = Layer.effect(
     })
     const pair = Effect.fn('T3Auth.pair')(
       function* (grant: Redacted.Redacted<string>) {
-        yield* exchangeAndPersist(grant)
-        yield* Effect.logInfo('auth.paired')
+        const paired = yield* exchangeAndPersist(grant)
+        yield* Effect.logInfo('auth.paired').pipe(
+          Effect.annotateLogs({
+            expiresAt: paired.expiresAt,
+            automaticRenewal: paired.scope.split(' ').includes('access:write'),
+          }),
+        )
       },
       (effect) => mutex.withPermit(effect),
     )
@@ -73,7 +79,9 @@ export const authLayer = Layer.effect(
         ) {
           return yield* new AuthError({ operation: 'renew', reason: 'manual-pairing-required' })
         }
-        if (saved.value.renewAt > now) return saved.value
+        // Normal pairing can run tasks but cannot create renewal grants.
+        if (saved.value.renewAt > now || !saved.value.scope.split(' ').includes('access:write'))
+          return saved.value
         const grant = yield* api.pairing(saved.value.accessToken).pipe(
           Effect.catchIf(
             (error) => error.status === 401 || error.status === 403,
@@ -84,7 +92,10 @@ export const authLayer = Layer.effect(
         if (DateTime.toEpochMillis(grant.expiresAt) <= now) {
           return yield* new AuthError({ operation: 'renew', reason: 'invalid-response' })
         }
-        const replacement = yield* exchangeAndPersist(grant.credential)
+        const replacement = yield* exchangeAndPersist(grant.credential, [
+          ...requiredScopes,
+          'access:write',
+        ])
         yield* Effect.logInfo('auth.renewed').pipe(
           Effect.annotateLogs({ expiresAt: replacement.expiresAt }),
         )
