@@ -170,7 +170,7 @@ it.effect('uses a normal paired credential until expiry without requesting acces
   }),
 )
 
-it.effect('retains clone permission when renewing a newly paired session', () =>
+it.effect('retains all granted permissions during automatic renewal', () =>
   Effect.gen(function* () {
     const fixture = yield* setup
     yield* Ref.set(
@@ -181,16 +181,22 @@ it.effect('retains clone permission when renewing a newly paired session', () =>
         accessToken: initial.accessToken,
         expiresAt: initial.expiresAt,
         renewAt: initial.renewAt,
-        scope: [...pairingScopes, 'access:write'].join(' '),
+        scope: [
+          ...pairingScopes,
+          'settings:write',
+          'access:read',
+          'access:write',
+          'relay:write',
+        ].join(' '),
       }),
     )
     yield* Effect.gen(function* () {
       const auth = yield* T3Auth
       const renewed = yield* auth.credential()
       expect(renewed.scope).toBe(
-        'orchestration:read orchestration:operate source-control:write access:write',
+        'orchestration:read orchestration:operate source-control:write settings:write access:read access:write relay:write',
       )
-      expect(yield* Ref.get(fixture.renewalRequests)).toEqual([[...pairingScopes, 'access:write']])
+      expect(yield* Ref.get(fixture.renewalRequests)).toEqual([renewed.scope.split(' ')])
     }).pipe(Effect.provide(fixture.layer))
   }),
 )

@@ -84,10 +84,7 @@ export const authLayer = Layer.effect(
         if (saved.value.renewAt > now || !saved.value.scope.split(' ').includes('access:write'))
           return saved.value
         // Renewal cannot add permissions that the existing session was never granted.
-        const renewalScopes = [
-          ...pairingScopes.filter((scope) => saved.value.scope.split(' ').includes(scope)),
-          'access:write',
-        ]
+        const renewalScopes = saved.value.scope.split(' ')
         const grant = yield* api.pairing(saved.value.accessToken, renewalScopes).pipe(
           Effect.catchIf(
             (error) => error.status === 401 || error.status === 403,
