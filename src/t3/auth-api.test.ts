@@ -8,7 +8,7 @@ import * as FetchHttpClient from 'effect/http/FetchHttpClient'
 import { createServer } from 'node:http'
 import { AuthApi, authApiLayer } from './auth-api.ts'
 import { T3Config } from './config.ts'
-import { requiredScopes } from './auth-model.ts'
+import { pairingScopes } from './auth-model.ts'
 
 const isString = Schema.is(Schema.String)
 
@@ -42,7 +42,7 @@ it.live('uses OAuth form encoding, explicit renewal scopes, and redacted secrets
                 issued_token_type: 'urn:ietf:params:oauth:token-type:access_token',
                 token_type: 'Bearer',
                 expires_in: 2592000,
-                scope: invalidScopes ? 'orchestration:read' : requiredScopes.join(' '),
+                scope: invalidScopes ? 'orchestration:read' : pairingScopes.join(' '),
               }
             : request.url === '/api/auth/pairing-token'
               ? {
@@ -83,7 +83,7 @@ it.live('uses OAuth form encoding, explicit renewal scopes, and redacted secrets
       expect(JSON.stringify(token)).not.toContain('bearer-secret')
       expect(new URLSearchParams(received[0]?.body).get('subject_token')).toBe('initial+&secret')
       expect(new URLSearchParams(received[0]?.body).get('scope')).toBe(
-        'orchestration:read orchestration:operate',
+        'orchestration:read orchestration:operate source-control:write',
       )
       expect(received[0]?.contentType).toContain('application/x-www-form-urlencoded')
       yield* api.pairing(token.access_token)
@@ -91,7 +91,7 @@ it.live('uses OAuth form encoding, explicit renewal scopes, and redacted secrets
       expect(received[1]?.authorization).toBe('Bearer bearer-secret')
       expect(JSON.parse(received[1]?.body ?? '{}')).toEqual({
         label: 'sunday renewal',
-        scopes: [...requiredScopes, 'access:write'],
+        scopes: [...pairingScopes, 'access:write'],
       })
       expect(received[2]?.path).toBe('/api/auth/websocket-ticket')
       invalidScopes = true

@@ -3,7 +3,9 @@ import * as Schema from 'effect/Schema'
 const Secret = Schema.RedactedFromValue(Schema.NonEmptyString)
 const Timestamp = Schema.Number.check(Schema.isFinite(), Schema.isGreaterThan(0))
 
+// Existing sessions can still launch tasks; new pairing also requests clone permission.
 export const requiredScopes = ['orchestration:read', 'orchestration:operate']
+export const pairingScopes = [...requiredScopes, 'source-control:write']
 
 export const Credential = Schema.Struct({
   version: Schema.Literal(1),

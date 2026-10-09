@@ -6,7 +6,7 @@ import * as Layer from 'effect/Layer'
 import * as Redacted from 'effect/Redacted'
 import * as Schema from 'effect/Schema'
 import { createServer } from 'node:http'
-import { WebSocketServer } from 'ws'
+import { WebSocketServer, type VerifyClientCallbackSync } from 'ws'
 import { T3Auth } from './auth.ts'
 import { T3Client, clientLayer } from './client.ts'
 import { T3Config } from './config.ts'
@@ -23,7 +23,7 @@ const Frame = Schema.fromJsonString(
 )
 const decodeFrame = Schema.decodeUnknownSync(Frame)
 
-it.live('uses T3 JSON RPC framing, fresh tickets, and T3-managed task bootstrap', () =>
+it.live('uses nightly launch RPC, fresh tickets, and T3-managed worktree preparation', () =>
   Effect.gen(function* () {
     const tickets: Array<string> = []
     const requests: Array<typeof Frame.Type> = []
@@ -43,7 +43,9 @@ it.live('uses T3 JSON RPC framing, fresh tickets, and T3-managed task bootstrap'
       projectSettingsFolded: true,
     }
     const server = createServer()
-    const sockets = new WebSocketServer({ server })
+    const verifyClient: VerifyClientCallbackSync = ({ req }) =>
+      new URL(req.url ?? '/', 'http://fixture').searchParams.get('orchestrationProtocol') === '2'
+    const sockets = new WebSocketServer({ server, verifyClient })
     yield* Effect.acquireRelease(
       Effect.tryPromise({
         try: () =>
@@ -102,7 +104,7 @@ it.live('uses T3 JSON RPC framing, fresh tickets, and T3-managed task bootstrap'
               ? settings
               : frame.tag === 'projectClone.start'
                 ? { projectId: 'cloned', cwd: '/server/cloned' }
-                : { sequence: 2 }
+                : { threadId: 'accepted-task', resumed: false, projection: {} }
           socket.send(
             JSON.stringify({ _tag: 'Exit', requestId: frame.id, exit: { _tag: 'Success', value } }),
           )
@@ -132,36 +134,23 @@ it.live('uses T3 JSON RPC framing, fresh tickets, and T3-managed task bootstrap'
       expect(yield* client.projects()).toEqual([
         { id: 'p', title: 'repo', workspaceRoot: '/srv/repo' },
       ])
-      const command = {
-        type: 'thread.turn.start',
+      const request = {
         commandId: 'c',
         threadId: 'task',
-        message: { messageId: 'm', role: 'user', text: 'Fix the bug', attachments: [] },
+        projectId: 'p',
+        title: 'Fix the bug',
+        initialMessage: { messageId: 'm', text: 'Fix the bug', attachments: [] },
         modelSelection: { instanceId: 'codex', model: 'gpt-6-luna' },
         runtimeMode: 'approval-required',
         interactionMode: 'default',
-        createdAt: new Date().toISOString(),
-        bootstrap: {
-          createThread: {
-            projectId: 'p',
-            title: 'Fix the bug',
-            modelSelection: { instanceId: 'codex', model: 'gpt-6-luna' },
-            runtimeMode: 'approval-required',
-            interactionMode: 'default',
-            branch: null,
-            worktreePath: null,
-            createdAt: new Date().toISOString(),
-          },
-          prepareWorktree: {
-            projectCwd: '/srv/repo',
-            baseBranch: 'main',
-            startFromOrigin: true,
-            requireWorktree: true,
-          },
-          runSetupScript: true,
+        workspaceStrategy: {
+          type: 'worktree',
+          baseRef: 'main',
+          branch: 'sunday/task',
+          startFromOrigin: true,
         },
-      } satisfies import('./protocol.ts').Command
-      expect(yield* client.dispatch(command)).toBe(2)
+      } satisfies import('./protocol.ts').ThreadLaunch
+      expect(yield* client.launch(request)).toBe('accepted-task')
       const cloneRequest = {
         projectId: 'cloned',
         title: 'owner/repo',
@@ -177,8 +166,8 @@ it.live('uses T3 JSON RPC framing, fresh tickets, and T3-managed task bootstrap'
       expect(tickets).toEqual(['ticket-1', 'ticket-2', 'ticket-3'])
       expect(requests[2]?.tag).toBe('projectClone.start')
       expect(requests[2]?.payload).toEqual(cloneRequest)
-      expect(requests[1]?.tag).toBe('orchestration.dispatchCommand')
-      expect(requests[1]?.payload).toEqual(command)
+      expect(requests[1]?.tag).toBe('orchestration.launchThread')
+      expect(requests[1]?.payload).toEqual(request)
       const project = {
         id: 'p',
         title: 'repo',

@@ -139,7 +139,7 @@ export const runBot = Effect.gen(function* () {
     const channelId = message.channelId
     const threadId = crypto.randomUUID()
     const messageId = crypto.randomUUID()
-    yield* launchLock.withPermit(
+    const launchedThreadId = yield* launchLock.withPermit(
       Effect.gen(function* () {
         const target = yield* resolveTarget(task, projects)
         const modelSelection = yield* t3.defaultModel(target.project)
@@ -148,51 +148,35 @@ export const runBot = Effect.gen(function* () {
             message:
               'No default model is configured in T3. Set a project or environment default in T3, then mention me again.',
           })
-        const createdAt = new Date(yield* Clock.currentTimeMillis).toISOString()
-        yield* t3.dispatch({
-          type: 'thread.turn.start',
+        return yield* t3.launch({
           commandId: crypto.randomUUID(),
           threadId,
-          message: {
+          projectId: target.project.id,
+          title: task.title,
+          initialMessage: {
             messageId,
-            role: 'user',
             text: task.prompt + target.metadata,
             attachments: [],
           },
           modelSelection,
           runtimeMode: settings.runtimeMode,
           interactionMode: 'default',
-          bootstrap: {
-            createThread: {
-              projectId: target.project.id,
-              title: task.title,
-              modelSelection,
-              runtimeMode: settings.runtimeMode,
-              interactionMode: 'default',
-              branch: null,
-              worktreePath: null,
-              createdAt,
-            },
-            prepareWorktree: {
-              projectCwd: target.project.workspaceRoot,
-              baseBranch: target.baseBranch,
-              branch: `sunday/${threadId}`,
-              startFromOrigin: task.target.kind === 'repository',
-              requireWorktree: true,
-            },
-            runSetupScript: true,
+          workspaceStrategy: {
+            type: 'worktree',
+            baseRef: target.baseBranch,
+            branch: `sunday/${threadId}`,
+            startFromOrigin: task.target.kind === 'repository',
           },
-          createdAt,
         })
       }),
     )
     yield* Effect.logInfo('task.started').pipe(
-      Effect.annotateLogs({ eventId: message.id, threadId, channelId }),
+      Effect.annotateLogs({ eventId: message.id, threadId: launchedThreadId, channelId }),
     )
-    const appLink = `${settings.landingUrl}/app/${encodeURIComponent(settings.environmentId)}/${encodeURIComponent(threadId)}`
+    const appLink = `${settings.landingUrl}/app/${encodeURIComponent(settings.environmentId)}/${encodeURIComponent(launchedThreadId)}`
     yield* discord.reply(
       message,
-      `Started: ${task.title}\n[Open in app](${appLink}) · [Open in web](${threadLink(threadId)})`,
+      `Started: ${task.title}\n[Open in app](${appLink}) · [Open in web](${threadLink(launchedThreadId)})`,
     )
   })
 

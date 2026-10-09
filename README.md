@@ -41,7 +41,7 @@ Set the LLM API key environment variable from Fleet's `agents/cpa1-api-key` gopa
 
 Sunday's internal context preparation uses `llm.model` and `llm.reasoningEffort`, with `gpt-6-luna` and `xhigh` in the example. Coding uses T3's project default model and options, falling back to its environment default. Configure these in T3; Sunday rejects launch if no default is configured.
 
-T3 manages task worktrees and setup scripts through its WebSocket turn-start bootstrap. Configure `t3.cloneRoot` as an absolute directory on the T3 host for missing repositories. The bot supplies `<cloneRoot>/<owner>/<repo>` to T3's clone method and waits for completion before launching the task. T3 performs the clone and registers the project. Existing projects keep their checkout location. The bot supplies a unique `sunday/<threadId>` branch for each task and does not configure or allocate worktree paths. Clone path validation is lexical; keep the clone root free of symlinks that escape it.
+T3 manages task worktrees and setup scripts through its `orchestration.launchThread` RPC. Configure `t3.cloneRoot` as an absolute directory on the T3 host for missing repositories. The bot supplies `<cloneRoot>/<owner>/<repo>` to T3's clone method and waits for completion before launching the task. T3 performs the clone and registers the project. Existing projects keep their checkout location. The bot supplies a unique `sunday/<threadId>` branch for each task and does not configure or allocate worktree paths. Clone path validation is lexical; keep the clone root free of symlinks that escape it.
 
 `discord.contextMessages` accepts 0 to 100; the example uses 25. The mention is supplied separately from these previous messages. Threads use their parent channel's description.
 
@@ -55,7 +55,9 @@ The file logger batches writes every second and flushes remaining entries during
 
 ## Pairing
 
-Use a normal T3 pairing code. Sunday requests only `orchestration:read` and `orchestration:operate`. Pipe the code to stdin without passing it as a command-line argument:
+Use a normal T3 pairing code. Sunday requests `orchestration:read`, `orchestration:operate`, and `source-control:write`. Existing sessions with only the two orchestration permissions can still launch tasks in registered projects. Clone requests need a new pairing grant with `source-control:write`; renewal preserves existing permissions and cannot add it.
+
+Pipe the code to stdin without passing it as a command-line argument:
 
 ```sh
 gopass show --noparsing <pairing-entry> | pnpm start pair
@@ -81,7 +83,7 @@ pnpm build
 
 `pnpm verify` runs formatting, lint, typechecking, and focused Effect tests. `pnpm build` produces one Linux x64 baseline executable including the Bun runtime. The executable does not require Bun, Node.js, or node_modules; supply the JSON configuration file and referenced environment variables.
 
-The T3 adapter targets upstream `pingdotgg/t3code` main at `54084ae1e6c32809db040e4fa571c80fdf2d8ae4`, checked on 2026-10-02. It uses JSON WebSocket RPC with a fresh ticket per connection. Mutating calls are not automatically replayed after an ambiguous response. Inspect T3 before retrying such a task.
+The T3 adapter targets upstream `pingdotgg/t3code` at `e01f72d108003d48310ae0e24dd6805ae085d889` from nightly `v0.0.46-preview.20261009.2851`, checked on 2026-10-09. It uses JSON WebSocket RPC with `orchestrationProtocol=2` and a fresh ticket per connection. Mutating calls are not automatically replayed after an ambiguous response. Inspect T3 before retrying such a task.
 
 Pull requests run the `Verify and build` check, including `pnpm verify`, compilation, and binary packaging. Configure this check as required in GitHub branch protection to gate merges.
 

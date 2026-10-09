@@ -1,8 +1,10 @@
-// Minimal contract adapter for upstream 54084ae1; private T3 packages are not dependencies.
+// Minimal contract adapter for T3 nightly e01f72d1; private T3 packages are not dependencies.
 /* oxlint-disable effecttsgo/unstable-api-usage */
 import * as Schema from 'effect/Schema'
 import * as Rpc from 'effect/rpc/Rpc'
 import * as RpcGroup from 'effect/rpc/RpcGroup'
+
+export const orchestrationProtocolVersion = '2'
 
 const Id = Schema.NonEmptyString
 export const ModelSelection = Schema.Struct({
@@ -19,45 +21,27 @@ const RuntimeMode = Schema.Literals([
   'full-access',
 ])
 const InteractionMode = Schema.Literals(['default', 'plan'])
-const TurnStart = Schema.Struct({
-  type: Schema.Literal('thread.turn.start'),
+export const ThreadLaunch = Schema.Struct({
   commandId: Id,
   threadId: Id,
-  message: Schema.Struct({
-    messageId: Id,
-    role: Schema.Literal('user'),
-    text: Schema.String,
-    attachments: Schema.Array(Schema.Never),
-  }),
+  projectId: Id,
+  title: Id,
   modelSelection: ModelSelection,
   runtimeMode: RuntimeMode,
   interactionMode: InteractionMode,
-  bootstrap: Schema.optionalKey(
-    Schema.Struct({
-      createThread: Schema.Struct({
-        projectId: Id,
-        title: Id,
-        modelSelection: ModelSelection,
-        runtimeMode: RuntimeMode,
-        interactionMode: InteractionMode,
-        branch: Schema.NullOr(Id),
-        worktreePath: Schema.NullOr(Id),
-        createdAt: Id,
-      }),
-      prepareWorktree: Schema.Struct({
-        projectCwd: Id,
-        baseBranch: Id,
-        branch: Schema.optionalKey(Id),
-        startFromOrigin: Schema.Boolean,
-        requireWorktree: Schema.Boolean,
-      }),
-      runSetupScript: Schema.Boolean,
-    }),
-  ),
-  createdAt: Id,
+  workspaceStrategy: Schema.Struct({
+    type: Schema.Literal('worktree'),
+    baseRef: Id,
+    branch: Id,
+    startFromOrigin: Schema.Boolean,
+  }),
+  initialMessage: Schema.Struct({
+    messageId: Id,
+    text: Schema.String,
+    attachments: Schema.Array(Schema.Never),
+  }),
 })
-export const Command = TurnStart
-export type Command = typeof Command.Type
+export type ThreadLaunch = typeof ThreadLaunch.Type
 
 export const Project = Schema.Struct({
   id: Id,
@@ -78,10 +62,10 @@ export const ShellItem = Schema.Union([
   Schema.Struct({ kind: Schema.Literal('synchronized') }),
   Schema.Struct({
     kind: Schema.Literals([
-      'project-upserted',
-      'project-removed',
-      'thread-upserted',
-      'thread-removed',
+      'project.updated',
+      'project.removed',
+      'thread.updated',
+      'thread.removed',
     ]),
   }),
 ])
@@ -103,9 +87,9 @@ export const group = RpcGroup.make(
     success: ModelDefaults,
     error: Schema.Json,
   }),
-  Rpc.make('orchestration.dispatchCommand', {
-    payload: Command,
-    success: Schema.Struct({ sequence: Schema.Natural }),
+  Rpc.make('orchestration.launchThread', {
+    payload: ThreadLaunch,
+    success: Schema.Struct({ threadId: Id, resumed: Schema.Boolean }),
     error: Schema.Json,
   }),
   Rpc.make('orchestration.subscribeShell', {

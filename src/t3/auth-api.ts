@@ -16,7 +16,7 @@ import {
   PairingResponse,
   TicketResponse,
   TokenResponse,
-  requiredScopes,
+  pairingScopes,
 } from './auth-model.ts'
 
 const decodeRejection = HttpClientResponse.schemaBodyJson(
@@ -35,6 +35,7 @@ interface AuthApiMethods {
   ) => Effect.Effect<typeof TokenResponse.Type, AuthError>
   readonly pairing: (
     token: Redacted.Redacted<string>,
+    scopes?: ReadonlyArray<string>,
   ) => Effect.Effect<typeof PairingResponse.Type, AuthError>
   readonly ticket: (
     token: Redacted.Redacted<string>,
@@ -70,7 +71,7 @@ export const authApiLayer = Layer.effect(
     })
     const exchange = Effect.fn('AuthApi.exchange')(function* (
       grant: Redacted.Redacted<string>,
-      requestedScopes: ReadonlyArray<string> = requiredScopes,
+      requestedScopes: ReadonlyArray<string> = pairingScopes,
     ) {
       const response = yield* execute(
         HttpClientRequest.post(`${config.origin}/oauth/token`).pipe(
@@ -94,12 +95,15 @@ export const authApiLayer = Layer.effect(
       }
       return token
     })
-    const pairing = Effect.fn('AuthApi.pairing')(function* (token: Redacted.Redacted<string>) {
+    const pairing = Effect.fn('AuthApi.pairing')(function* (
+      token: Redacted.Redacted<string>,
+      scopes: ReadonlyArray<string> = [...pairingScopes, 'access:write'],
+    ) {
       const request = yield* HttpClientRequest.post(`${config.origin}/api/auth/pairing-token`).pipe(
         HttpClientRequest.bearerToken(token),
         HttpClientRequest.bodyJson({
           label: 'sunday renewal',
-          scopes: [...requiredScopes, 'access:write'],
+          scopes,
         }),
         Effect.mapError(() => new AuthError({ operation: 'pairing', reason: 'invalid-response' })),
       )

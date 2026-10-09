@@ -14,6 +14,7 @@ import {
   CredentialError,
   TicketResponse,
   requiredScopes,
+  pairingScopes,
 } from './auth-model.ts'
 import { T3Config } from './config.ts'
 import { CredentialStore } from './credential-store.ts'
@@ -36,7 +37,7 @@ export const authLayer = Layer.effect(
     const mutex = yield* Semaphore.make(1)
     const exchangeAndPersist = Effect.fn('T3Auth.exchangeAndPersist')(function* (
       grant: Redacted.Redacted<string>,
-      scopes: ReadonlyArray<string> = requiredScopes,
+      scopes: ReadonlyArray<string> = pairingScopes,
     ) {
       // Use the time before the request so network latency never extends token validity.
       const startedAt = yield* Clock.currentTimeMillis
@@ -82,7 +83,12 @@ export const authLayer = Layer.effect(
         // Normal pairing can run tasks but cannot create renewal grants.
         if (saved.value.renewAt > now || !saved.value.scope.split(' ').includes('access:write'))
           return saved.value
-        const grant = yield* api.pairing(saved.value.accessToken).pipe(
+        // Renewal cannot add permissions that the existing session was never granted.
+        const renewalScopes = [
+          ...pairingScopes.filter((scope) => saved.value.scope.split(' ').includes(scope)),
+          'access:write',
+        ]
+        const grant = yield* api.pairing(saved.value.accessToken, renewalScopes).pipe(
           Effect.catchIf(
             (error) => error.status === 401 || error.status === 403,
             () =>
@@ -92,10 +98,7 @@ export const authLayer = Layer.effect(
         if (DateTime.toEpochMillis(grant.expiresAt) <= now) {
           return yield* new AuthError({ operation: 'renew', reason: 'invalid-response' })
         }
-        const replacement = yield* exchangeAndPersist(grant.credential, [
-          ...requiredScopes,
-          'access:write',
-        ])
+        const replacement = yield* exchangeAndPersist(grant.credential, renewalScopes)
         yield* Effect.logInfo('auth.renewed').pipe(
           Effect.annotateLogs({ expiresAt: replacement.expiresAt }),
         )

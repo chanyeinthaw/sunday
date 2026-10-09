@@ -12,7 +12,13 @@ import * as RpcSerialization from 'effect/rpc/RpcSerialization'
 import { T3Auth } from './auth.ts'
 import { T3Config } from './config.ts'
 import { AuthError, CredentialError } from './auth-model.ts'
-import { Command, ModelSelection, Project, group } from './protocol.ts'
+import {
+  ThreadLaunch,
+  ModelSelection,
+  Project,
+  group,
+  orchestrationProtocolVersion,
+} from './protocol.ts'
 
 export class T3Error extends Schema.TaggedError<T3Error>()('T3Error', {
   operation: Schema.String,
@@ -31,7 +37,7 @@ interface ClientMethods {
     project: Project,
   ) => Effect.Effect<typeof ModelSelection.Type | null, Failure>
   readonly projects: () => Effect.Effect<ReadonlyArray<Project>, Failure>
-  readonly dispatch: (command: Command) => Effect.Effect<number, Failure>
+  readonly launch: (request: ThreadLaunch) => Effect.Effect<string, Failure>
   readonly clone: (
     request: CloneRequest,
   ) => Effect.Effect<{ readonly projectId: string; readonly cwd: string }, Failure>
@@ -49,6 +55,7 @@ export const clientLayer = Layer.effect(
       const ticket = yield* auth.ticket()
       const url = new URL('/ws', config.origin)
       url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+      url.searchParams.set('orchestrationProtocol', orchestrationProtocolVersion)
       url.searchParams.set('wsTicket', Redacted.value(ticket.ticket))
       const socketLayer = Socket.layerWebSocket(url.href).pipe(
         Layer.provide(Socket.layerWebSocketConstructorGlobal),
@@ -91,17 +98,17 @@ export const clientLayer = Layer.effect(
       Effect.timeout('30 seconds'),
       Effect.mapError(() => new T3Error({ operation: 'defaultModel' })),
     )
-    const dispatch = Effect.fn('T3Client.dispatch')(
-      function* (command: Command) {
+    const launch = Effect.fn('T3Client.launch')(
+      function* (request: ThreadLaunch) {
         const client = yield* connect()
-        const result = yield* client['orchestration.dispatchCommand'](command).pipe(
-          Effect.mapError(() => new T3Error({ operation: 'dispatch' })),
+        const result = yield* client['orchestration.launchThread'](request).pipe(
+          Effect.mapError(() => new T3Error({ operation: 'launch' })),
         )
-        return result.sequence
+        return result.threadId
       },
       Effect.scoped,
       Effect.timeout('10 minutes'),
-      Effect.mapError(() => new T3Error({ operation: 'dispatch' })),
+      Effect.mapError(() => new T3Error({ operation: 'launch' })),
     )
     const clone = Effect.fn('T3Client.clone')(
       function* (request: CloneRequest) {
@@ -131,6 +138,6 @@ export const clientLayer = Layer.effect(
       Effect.timeout('30 seconds'),
       Effect.mapError(() => new T3Error({ operation: 'clonePhase' })),
     )
-    return T3Client.of({ projects, defaultModel, dispatch, clone, clonePhase })
+    return T3Client.of({ projects, defaultModel, launch, clone, clonePhase })
   }),
 )

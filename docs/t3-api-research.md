@@ -1,6 +1,12 @@
 # Bot API research for current upstream T3 Code
 
-Implementation update, 2026-10-02: the bot uses the WebSocket turn-start bootstrap for T3-managed worktree paths, branch creation, and setup. Upstream main requires `destinationPath` for `projectClone.start`, so the bot supplies `<t3.cloneRoot>/<owner>/<repo>` to that method. T3 performs the clone and registers the project; the bot waits for completion and uses T3's returned checkout path. There is no worktree root setting.
+Implementation update, 2026-10-09: Sunday targets nightly `v0.0.46-preview.20261009.2851` at `e01f72d108003d48310ae0e24dd6805ae085d889`. WebSocket upgrades require `orchestrationProtocol=2` and reject the old handshake with HTTP 426. The old `thread.turn.start` bootstrap is gone. The bot now calls `orchestration.launchThread` with `{commandId,threadId,projectId,title,modelSelection,runtimeMode,interactionMode,workspaceStrategy,initialMessage}`. Its workspace strategy is `{type:"worktree",baseRef,branch,startFromOrigin}`. T3 owns worktree allocation and setup, and accepts the launch before asynchronous preparation finishes. Sunday uses the returned `threadId` for links. Shell event names are now `project.updated`, `project.removed`, `thread.updated`, and `thread.removed`.
+
+`projectClone.start` and its progress subscription retain compatible payloads. Cloning now requires `source-control:write`; the two orchestration permissions still cover discovery, model settings, and launch. Fresh pairing requests all three permissions. Renewal retains permissions already granted, so an old session needs re-pairing to enable cloning. OAuth token exchange, bearer WebSocket tickets, and project model overrides remain compatible.
+
+Sources: [nightly launch contracts](https://github.com/pingdotgg/t3code/blob/e01f72d108003d48310ae0e24dd6805ae085d889/packages/contracts/src/orchestrationV2.ts#L3181), [workspace preparation](https://github.com/pingdotgg/t3code/blob/e01f72d108003d48310ae0e24dd6805ae085d889/apps/server/src/orchestration-v2/ThreadLaunchService.ts#L309), [clone permissions](https://github.com/pingdotgg/t3code/blob/e01f72d108003d48310ae0e24dd6805ae085d889/packages/contracts/src/clientRpcPermissions.ts#L25), and [renewal grant restriction](https://github.com/pingdotgg/t3code/blob/e01f72d108003d48310ae0e24dd6805ae085d889/apps/server/src/auth/http.ts#L432).
+
+The remaining findings describe the original protocol and are retained as historical reference.
 
 Researched 2026-10-01 against `pingdotgg/t3code` upstream main commit `5cc99e1c23980d7995a13c47f969b47cb68ed1be`. All implementation claims below refer to that commit. The local Pulse fork and installed server are outside this report. No running server or application state was accessed.
 

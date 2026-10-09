@@ -7,7 +7,13 @@ import * as Redacted from 'effect/Redacted'
 import * as Ref from 'effect/Ref'
 import * as TestClock from 'effect/testing/TestClock'
 import { AuthApi } from './auth-api.ts'
-import { AuthError, Credential, CredentialError, requiredScopes } from './auth-model.ts'
+import {
+  AuthError,
+  Credential,
+  CredentialError,
+  requiredScopes,
+  pairingScopes,
+} from './auth-model.ts'
 import { T3Auth, authLayer } from './auth.ts'
 import { T3Config } from './config.ts'
 import { CredentialStore } from './credential-store.ts'
@@ -33,18 +39,21 @@ const setup = Effect.gen(function* () {
   yield* TestClock.setTime(now)
   const saved = yield* Ref.make<Option.Option<Credential>>(Option.some(initial))
   const rotations = yield* Ref.make(0)
+  const renewalRequests = yield* Ref.make<ReadonlyArray<ReadonlyArray<string>>>([])
   const rejectSave = yield* Ref.make(false)
   const api = Layer.succeed(
     AuthApi,
     AuthApi.of({
-      exchange: Effect.fn('Test.exchange')(() =>
+      exchange: Effect.fn('Test.exchange')((_, scopes) =>
         Effect.succeed({
           ...token,
+          scope: scopes?.join(' ') ?? token.scope,
           issued_token_type: 'urn:ietf:params:oauth:token-type:access_token',
           token_type: 'Bearer',
         }),
       ),
-      pairing: Effect.fn('Test.pairing')(function* () {
+      pairing: Effect.fn('Test.pairing')(function* (_, scopes) {
+        yield* Ref.update(renewalRequests, (requests) => [...requests, scopes ?? []])
         yield* Ref.update(rotations, (count) => count + 1)
         return {
           credential: Redacted.make('grant-secret'),
@@ -76,6 +85,7 @@ const setup = Effect.gen(function* () {
   return {
     saved,
     rotations,
+    renewalRequests,
     rejectSave,
     layer: authLayer.pipe(Layer.provide(api), Layer.provide(store), Layer.provide(config)),
   }
@@ -97,6 +107,9 @@ describe('T3 credential rotation', () => {
           'new-secret',
         ])
         expect(yield* Ref.get(fixture.rotations)).toBe(1)
+        expect(yield* Ref.get(fixture.renewalRequests)).toEqual([
+          [...requiredScopes, 'access:write'],
+        ])
         expect(Option.getOrThrow(yield* Ref.get(fixture.saved))).toEqual(credentials[0])
       }).pipe(Effect.provide(fixture.layer))
     }),
@@ -153,6 +166,31 @@ it.effect('uses a normal paired credential until expiry without requesting acces
       expect(yield* auth.credential().pipe(Effect.flip)).toMatchObject({
         reason: 'manual-pairing-required',
       })
+    }).pipe(Effect.provide(fixture.layer))
+  }),
+)
+
+it.effect('retains clone permission when renewing a newly paired session', () =>
+  Effect.gen(function* () {
+    const fixture = yield* setup
+    yield* Ref.set(
+      fixture.saved,
+      Option.some({
+        version: initial.version,
+        origin: initial.origin,
+        accessToken: initial.accessToken,
+        expiresAt: initial.expiresAt,
+        renewAt: initial.renewAt,
+        scope: [...pairingScopes, 'access:write'].join(' '),
+      }),
+    )
+    yield* Effect.gen(function* () {
+      const auth = yield* T3Auth
+      const renewed = yield* auth.credential()
+      expect(renewed.scope).toBe(
+        'orchestration:read orchestration:operate source-control:write access:write',
+      )
+      expect(yield* Ref.get(fixture.renewalRequests)).toEqual([[...pairingScopes, 'access:write']])
     }).pipe(Effect.provide(fixture.layer))
   }),
 )

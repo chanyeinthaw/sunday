@@ -12,7 +12,7 @@ import { Settings } from './settings.ts'
 import { T3Auth } from './t3/auth.ts'
 import { T3Client } from './t3/client.ts'
 import { T3Config } from './t3/config.ts'
-import type { Command, ModelSelection, Project } from './t3/protocol.ts'
+import type { ThreadLaunch, ModelSelection, Project } from './t3/protocol.ts'
 
 const context: DiscordContext = {
   channelName: 'support',
@@ -44,7 +44,7 @@ const fixture = Effect.fn('BotTest.fixture')(function* (
   const clones = yield* Ref.make<
     ReadonlyArray<{ projectId: string; destinationPath: string; repository: string }>
   >([])
-  const commands = yield* Ref.make<ReadonlyArray<Command>>([])
+  const commands = yield* Ref.make<ReadonlyArray<ThreadLaunch>>([])
   const replies = yield* Ref.make<ReadonlyArray<string>>([])
   const calls = yield* Ref.make(0)
   const discord = Layer.succeed(
@@ -82,8 +82,10 @@ const fixture = Effect.fn('BotTest.fixture')(function* (
     T3Client.of({
       projects: () => Effect.succeed(projects),
       defaultModel: () => Effect.succeed(defaultModel),
-      dispatch: (command) =>
-        Ref.update(commands, (current) => [...current, command]).pipe(Effect.as(1)),
+      launch: (command) =>
+        Ref.update(commands, (current) => [...current, command]).pipe(
+          Effect.as(`accepted-${command.threadId}`),
+        ),
       clone: (request) =>
         Ref.update(clones, (current) => [...current, request]).pipe(
           Effect.as({ projectId: request.projectId, cwd: '/server/returned-checkout' }),
@@ -149,12 +151,12 @@ it.effect(
       yield* runBot.pipe(Effect.provide(test.layer), Effect.scoped)
       expect(yield* Ref.get(test.clones)).toEqual([])
       const commands = yield* Ref.get(test.commands)
-      const turns = commands.filter((command) => command.type === 'thread.turn.start')
+      const turns = commands
       expect(turns).toHaveLength(2)
       expect(yield* Ref.get(test.replies)).toEqual(
         turns.map(
           (turn) =>
-            `Started: ${task.title}\n[Open in app](https://sunday.example.com/app/env/${turn.threadId}) · [Open in web](https://code.p.si14.space/env/${turn.threadId})`,
+            `Started: ${task.title}\n[Open in app](https://sunday.example.com/app/env/accepted-${turn.threadId}) · [Open in web](https://code.p.si14.space/env/accepted-${turn.threadId})`,
         ),
       )
       expect(new Set(turns.map((command) => command.threadId)).size).toBe(2)
@@ -164,28 +166,18 @@ it.effect(
           model: 'configured-model',
           options: [{ id: 'reasoningEffort', value: 'medium' }],
         })
-        expect(turn.bootstrap).toEqual({
-          createThread: {
-            projectId: 'existing-project',
-            title: task.title,
-            modelSelection: turn.modelSelection,
-            runtimeMode: 'approval-required',
-            interactionMode: 'default',
-            branch: null,
-            worktreePath: null,
-            createdAt: turn.createdAt,
-          },
-          prepareWorktree: {
-            projectCwd: '/srv/app',
-            baseBranch: 'HEAD',
-            branch: `sunday/${turn.threadId}`,
-            startFromOrigin: false,
-            requireWorktree: true,
-          },
-          runSetupScript: true,
+        expect(turn.projectId).toBe('existing-project')
+        expect(turn.workspaceStrategy).toEqual({
+          type: 'worktree',
+          baseRef: 'HEAD',
+          branch: `sunday/${turn.threadId}`,
+          startFromOrigin: false,
         })
       }
-      expect(turns.map((command) => command.message.text)).toEqual([task.prompt, task.prompt])
+      expect(turns.map((command) => command.initialMessage.text)).toEqual([
+        task.prompt,
+        task.prompt,
+      ])
     }),
 )
 
@@ -202,7 +194,7 @@ it.effect('asks for repository information without launching when the LLM reject
   }),
 )
 
-it.effect('clones a missing repository through T3 and bootstraps from the returned checkout', () =>
+it.effect('clones a missing repository through T3 and launches in its registered project', () =>
   Effect.gen(function* () {
     const test = yield* fixture([
       { ...task, target: { kind: 'repository', repository: 'owner/missing' } },
@@ -216,13 +208,12 @@ it.effect('clones a missing repository through T3 and bootstraps from the return
     })
     const commands = yield* Ref.get(test.commands)
     expect(commands).toHaveLength(1)
-    expect(commands[0]?.bootstrap?.createThread.projectId).toBe(clones[0]?.projectId)
-    expect(commands[0]?.bootstrap?.prepareWorktree).toEqual({
-      projectCwd: '/server/returned-checkout',
-      baseBranch: 'main',
+    expect(commands[0]?.projectId).toBe(clones[0]?.projectId)
+    expect(commands[0]?.workspaceStrategy).toEqual({
+      type: 'worktree',
+      baseRef: 'main',
       branch: `sunday/${commands[0]?.threadId}`,
       startFromOrigin: true,
-      requireWorktree: true,
     })
   }),
 )
