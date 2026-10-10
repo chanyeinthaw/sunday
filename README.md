@@ -1,4 +1,18 @@
-# sunday
+# Sunday
+
+A Discord bot that turns mentions and conversation context into coding tasks in T3 Code.
+
+## Why I built it
+
+I wanted to start a coding task from a Discord conversation and use that conversation to identify the repository and prepare the request. Sunday handles that handoff and gives me a link to continue in T3 Code.
+
+- Uses the mention, recent messages, and channel description to prepare the task.
+- Finds an existing T3 project or asks T3 to clone and register the selected GitHub repository.
+- Launches each accepted request in its own Git worktree and T3 thread.
+- Returns mobile and web links so I can review and continue the work in T3.
+- Ships as a standalone Linux executable with configurable access policies and protected pairing credentials.
+
+## How it works
 
 A Discord mention starts a new coding task in T3 Code. The bot sends the mention, up to N previous messages, the channel description, and existing T3 projects to an LLM. The LLM selects the project or GitHub repository and prepares the initial prompt. If it cannot identify a target, the bot asks for repository information. Mention it again to submit a new task.
 
